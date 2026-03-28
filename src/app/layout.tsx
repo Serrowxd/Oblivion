@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { ibmPlexMono, spaceGrotesk } from "@/app/fonts";
+import Link from "next/link";
 import "./globals.css";
 
 export const metadata: Metadata = {
@@ -26,14 +27,14 @@ export default function RootLayout({
             <header className="border-b border-[var(--border)] pb-5">
               <div className="flex flex-wrap items-start justify-between gap-4">
                 <div className="min-w-0">
-                  <a href="/" className="group block">
+                  <Link href="/" className="group block">
                     <span className="panel-label mb-1.5 block group-hover:text-[var(--muted)]">
                       [ SYS / OBLIVION ]
                     </span>
                     <span className="glitch-title block text-2xl tracking-tight sm:text-3xl">
                       Oblivion
                     </span>
-                  </a>
+                  </Link>
                   <p className="mt-2 max-w-lg font-mono text-xs leading-relaxed text-[var(--muted)]">
                     Embrace Oblivion - scream, vanish; threads decay after 24 hours.
                   </p>
