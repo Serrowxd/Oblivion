@@ -22,6 +22,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   if (r.kind === "lost") {
     return { title: "Lost — Oblivion" };
   }
+  if (r.kind === "unavailable") {
+    return { title: "Unreachable — Oblivion" };
+  }
   return {
     title: `${r.post.title?.trim() || "Untitled"} — Oblivion`,
   };
@@ -33,6 +36,27 @@ export default async function PostPage({ params }: Props) {
 
   if (resolved.kind === "notfound") {
     notFound();
+  }
+
+  if (resolved.kind === "unavailable") {
+    return (
+      <main className="space-y-6">
+        <div className="void-panel panel-static space-y-4 p-4 sm:p-5">
+          <p className="panel-label">[ NO_SIGNAL ]</p>
+          <h1 className="text-2xl font-bold tracking-tight text-zinc-200 sm:text-3xl">
+            CAN&apos;T REACH THE VOID
+          </h1>
+          <p className="font-mono text-sm leading-relaxed text-[var(--muted)]">
+            The archive is not responding. Try again shortly.
+          </p>
+          <p>
+            <Link href="/" className="link-signal font-mono text-sm">
+              ← Back
+            </Link>
+          </p>
+        </div>
+      </main>
+    );
   }
 
   if (resolved.kind === "lost") {

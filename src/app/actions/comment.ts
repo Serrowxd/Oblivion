@@ -14,16 +14,40 @@ import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { and, asc, eq, sql } from "drizzle-orm";
 
+const DB_UNAVAILABLE =
+  "The void is unreachable right now. Try again in a moment.";
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function isLikelyUuid(id: string): boolean {
+  return UUID_RE.test(id);
+}
+
 export async function loadComments(postId: string) {
-  const db = getDb();
-  return db
-    .select()
-    .from(comments)
-    .where(eq(comments.postId, postId))
-    .orderBy(asc(comments.createdAt));
+  if (!isLikelyUuid(postId)) {
+    return [];
+  }
+  try {
+    const db = getDb();
+    return await db
+      .select()
+      .from(comments)
+      .where(eq(comments.postId, postId))
+      .orderBy(asc(comments.createdAt));
+  } catch (e) {
+    console.error("loadComments:", e);
+    return [];
+  }
 }
 
 export async function addComment(postId: string, body: string) {
+  if (typeof body !== "string") {
+    return { error: "Invalid request." };
+  }
+  if (!isLikelyUuid(postId)) {
+    return { error: "Invalid request." };
+  }
   if (body.length > MAX_COMMENT_BODY_CHARS) {
     return { error: "Comment is too long." };
   }
@@ -31,53 +55,58 @@ export async function addComment(postId: string, body: string) {
     return { error: "Comment cannot be empty." };
   }
 
-  const db = getDb();
-  const live = await db
-    .select({ id: posts.id })
-    .from(posts)
-    .where(
-      and(eq(posts.id, postId), sql`${posts.expiresAt} > now()`)
-    )
-    .limit(1);
+  try {
+    const db = getDb();
+    const live = await db
+      .select({ id: posts.id })
+      .from(posts)
+      .where(
+        and(eq(posts.id, postId), sql`${posts.expiresAt} > now()`)
+      )
+      .limit(1);
 
-  if (live.length === 0) {
-    return { error: "This thread is closed or gone." };
+    if (live.length === 0) {
+      return { error: "This thread is closed or gone." };
+    }
+
+    const jar = await cookies();
+    const raw = jar.get(COOKIE_NAME)?.value;
+
+    let identity = raw ? verifyIdentity(raw) : null;
+    if (!identity) {
+      identity = newIdentity();
+    }
+
+    const anonKeyHash = hashAnonKey(identity.key);
+
+    await db.insert(comments).values({
+      postId,
+      bodyMarkdown: body,
+      anonKeyHash,
+      displayName: identity.displayName,
+      avatarSeed: identity.avatarSeed,
+    });
+
+    jar.set(COOKIE_NAME, signIdentity(identity), {
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 400,
+    });
+
+    const [pathRow] = await db
+      .select({ slug: posts.slug })
+      .from(posts)
+      .where(eq(posts.id, postId))
+      .limit(1);
+    if (pathRow) {
+      revalidatePath(`/${pathRow.slug}`);
+    }
+
+    return { ok: true as const };
+  } catch (e) {
+    console.error("addComment:", e);
+    return { error: DB_UNAVAILABLE };
   }
-
-  const jar = await cookies();
-  const raw = jar.get(COOKIE_NAME)?.value;
-
-  let identity = raw ? verifyIdentity(raw) : null;
-  if (!identity) {
-    identity = newIdentity();
-  }
-
-  const anonKeyHash = hashAnonKey(identity.key);
-
-  await db.insert(comments).values({
-    postId,
-    bodyMarkdown: body,
-    anonKeyHash,
-    displayName: identity.displayName,
-    avatarSeed: identity.avatarSeed,
-  });
-
-  jar.set(COOKIE_NAME, signIdentity(identity), {
-    httpOnly: true,
-    sameSite: "lax",
-    secure: process.env.NODE_ENV === "production",
-    path: "/",
-    maxAge: 60 * 60 * 24 * 400,
-  });
-
-  const [pathRow] = await db
-    .select({ slug: posts.slug })
-    .from(posts)
-    .where(eq(posts.id, postId))
-    .limit(1);
-  if (pathRow) {
-    revalidatePath(`/${pathRow.slug}`);
-  }
-
-  return { ok: true as const };
 }

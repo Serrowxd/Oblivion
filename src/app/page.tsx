@@ -12,7 +12,9 @@ function formatWhen(d: Date) {
 }
 
 export default async function HomePage() {
-  const recent = await loadRecentPostsForHome();
+  const feed = await loadRecentPostsForHome();
+  const recent = feed.ok ? feed.posts : [];
+  const feedFailed = !feed.ok;
 
   return (
     <main className="space-y-8">
@@ -26,7 +28,12 @@ export default async function HomePage() {
       <section className="void-panel space-y-4 p-4 sm:p-5">
         <h2 className="panel-label">[ RECENT_FEED ]</h2>
         <ul className="divide-y divide-[var(--border)]">
-          {recent.length === 0 ? (
+          {feedFailed ? (
+            <li className="py-4 font-mono text-sm text-amber-400/90">
+              Couldn&apos;t load the feed. The archive may be unreachable — try
+              refreshing.
+            </li>
+          ) : recent.length === 0 ? (
             <li className="py-4 font-mono text-sm text-[var(--muted)]">
               Nothing here yet. Be the first.
             </li>

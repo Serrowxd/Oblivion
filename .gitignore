@@ -141,3 +141,6 @@ vite.config.ts.timestamp-*
 # Cursor / local agent files (not application source)
 .cursor/
 .agents/
+
+# AI tooling lockfiles
+skills-lock.json

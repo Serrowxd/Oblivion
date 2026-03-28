@@ -2,7 +2,8 @@ import { sql } from "drizzle-orm";
 import { getDb } from "@/db";
 
 /**
- * Delete expired posts (cascades comments), insert tombstones for those slugs. Single statement, atomic.
+ * Delete expired posts (cascades comments), insert tombstones for those slugs.
+ * One SQL statement → one transaction on Postgres; no partial delete vs tombstone apply.
  */
 export async function purgeExpiredPosts(): Promise<{ deleted: number }> {
   const db = getDb();
@@ -19,7 +20,18 @@ export async function purgeExpiredPosts(): Promise<{ deleted: number }> {
     SELECT count(*)::int AS deleted FROM del
   `);
 
-  const row = result.rows[0] as { deleted: number } | undefined;
-  const deleted = row?.deleted ?? 0;
+  const row = result.rows[0] as { deleted: number | string } | undefined;
+  const raw = row?.deleted ?? 0;
+  const deleted =
+    typeof raw === "number" ? raw : Number.parseInt(String(raw), 10) || 0;
   return { deleted };
+}
+
+/** For user-facing routes: never fail the page if purge cannot run. */
+export async function tryPurgeExpiredPosts(): Promise<void> {
+  try {
+    await purgeExpiredPosts();
+  } catch (e) {
+    console.error("tryPurgeExpiredPosts:", e);
+  }
 }
